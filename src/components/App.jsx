@@ -1,7 +1,7 @@
 import { ToastContainer, toast, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import { Component } from 'react';
+import { useEffect, useState } from 'react';
 import fetchImagesAPIService from 'secrvices/imagesAPIservice';
 import Searchbar from './Searchbar';
 import ImageGallery from './ImageGallery';
@@ -17,27 +17,27 @@ const Status = {
   REJECTED: 'rejected',
 };
 
-export class App extends Component {
-  state = {
-    query: '',
-    images: [],
-    page: 1,
-    modalData: {},
-    modalVisible: false,
-    status: Status.IDLE,
-    isLoadMore: false,
-  };
+const App = () => {
+  const [query, setQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [modalData, setModalData] = useState({});
+  const [modalVisible, setModalVisible] = useState(false);
+  const [status, setStatus] = useState(Status.IDLE);
+  const [isLoadMore, setIsLoadMore] = useState(false);
 
-  async componentDidUpdate(prevProps, prevState) {
-    const { query, page } = this.state;
+  useEffect(() => {
+    if (!query) {
+      return;
+    }
 
-    if (prevState.query !== query || prevState.page !== page) {
-      if (prevState.query !== query) {
-        this.toggleLoadMore(false);
-        this.setState({ images: [] });
+    const fetchData = async () => {
+      if (page === 1) {
+        setIsLoadMore(false);
+        setImages([]);
       }
 
-      this.changeStatus(Status.PENDING);
+      setStatus(Status.PENDING);
 
       try {
         const ITEMS_PER_PAGE = 12;
@@ -49,7 +49,7 @@ export class App extends Component {
         const totalPages = Math.ceil(totalHits / ITEMS_PER_PAGE);
 
         if (query === '' || hits.length === 0 || !hits) {
-          this.changeStatus(Status.RESOLVED);
+          setStatus(Status.RESOLVED);
           return toast.info(
             'Sorry, there are no images matching your search query. Please try again.',
             {
@@ -59,11 +59,11 @@ export class App extends Component {
         }
 
         if (totalPages > 1) {
-          this.toggleLoadMore(true);
+          setIsLoadMore(true);
         }
 
         if (page === totalPages) {
-          this.toggleLoadMore(false);
+          setIsLoadMore(false);
           toast.info(
             "We're sorry, but you've reached the end of search results.",
             {
@@ -78,69 +78,44 @@ export class App extends Component {
           });
         }
 
-        this.setState(prevState => ({
-          images: [...prevState.images, ...hits],
-        }));
+        setImages(prevState => {
+          return [...prevState, ...hits];
+        });
 
-        this.changeStatus(Status.RESOLVED);
-      } catch (error) {
-        console.log(error);
+        setStatus(Status.RESOLVED);
+      } catch (e) {
+        console.log(e);
       }
+    };
 
-      if (query === '') {
-        this.toggleLoadMore(false);
-      }
-    }
-  }
+    fetchData();
+  }, [page, query]);
 
-  handleSubmit = async query => {
-    this.setState({ query, page: 1 });
+  const toggleModal = modalData => {
+    setModalData(modalData);
+    setModalVisible(modalVisible => !modalVisible);
   };
 
-  toggleModal = modalData => {
-    this.setState({ modalData });
+  return (
+    <>
+      <ToastContainer transition={Slide} />
+      <Searchbar
+        onSubmit={query => {
+          setQuery(query);
+          setPage(1);
+        }}
+      />
+      <Section>
+        {modalVisible && <Modal dataModal={modalData} onClose={toggleModal} />}
+        <ImageGallery status={status} images={images} onClick={toggleModal} />
+        {status === 'pending' && <Loader />}
 
-    this.setState(({ modalVisible }) => ({
-      modalVisible: !modalVisible,
-    }));
-  };
+        {status !== 'pending' && isLoadMore && (
+          <LoadMore onClick={() => setPage(prevPage => prevPage + 1)} />
+        )}
+      </Section>
+    </>
+  );
+};
 
-  toggleLoadMore = isLoadMore => {
-    this.setState({ isLoadMore });
-  };
-
-  changeStatus = status => {
-    this.setState({ status });
-  };
-
-  handleLoadMore = async () => {
-    this.setState(({ page }) => ({
-      page: page + 1,
-    }));
-  };
-
-  render() {
-    const { modalVisible, modalData, status, isLoadMore, images } = this.state;
-    return (
-      <>
-        <ToastContainer transition={Slide} />
-        <Searchbar onSubmit={this.handleSubmit} />
-        <Section>
-          {modalVisible && (
-            <Modal dataModal={modalData} onClose={this.toggleModal} />
-          )}
-          <ImageGallery
-            status={status}
-            images={images}
-            onClick={this.toggleModal}
-          />
-          {status === 'pending' && <Loader />}
-
-          {status !== 'pending' && isLoadMore && (
-            <LoadMore onClick={this.handleLoadMore} />
-          )}
-        </Section>
-      </>
-    );
-  }
-}
+export default App;
